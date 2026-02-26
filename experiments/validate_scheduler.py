@@ -1,4 +1,3 @@
-# experiments/validate_scheduler.py
 import sys, os
 sys.path.insert(0, os.path.abspath("."))
 
@@ -38,11 +37,11 @@ for k, v in summary.items():
 pct = summary["pct_heavy"]
 print(f"\n── Sanity Check ──")
 if 5 <= pct <= 80:
-    print(f"✅ PASS: {pct}% heavy triggers — reasonable range (5–80%)")
+    print(f"PASS: {pct}% heavy triggers — reasonable range (5–80%)")
     print("   Scheduler is working. Proceed to threshold sweep.")
 elif pct == 0:
-    print(f"❌ FAIL: 0% heavy triggers — threshold T={THRESHOLD} is too high, lower it")
+    print(f"FAIL: 0% heavy triggers — threshold T={THRESHOLD} is too high, lower it")
 elif pct > 80:
-    print(f"❌ FAIL: {pct}% heavy triggers — threshold T={THRESHOLD} is too low, raise it")
+    print(f"FAIL: {pct}% heavy triggers — threshold T={THRESHOLD} is too low, raise it")
 else:
-    print(f"⚠️  Borderline: {pct}% — check trigger reasons above")
+    print(f"Borderline: {pct}% — check trigger reasons above")

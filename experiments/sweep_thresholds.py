@@ -1,4 +1,3 @@
-# experiments/sweep_thresholds.py
 import sys, os
 sys.path.insert(0, os.path.abspath("."))
 
@@ -9,7 +8,6 @@ from pathlib import Path
 from src.scheduler import AdaptiveScheduler
 from data.caltech.parse_annotations import load_annotations_for_sequences
 
-# ── Config ────────────────────────────────────────────────────────────────
 LIGHT = "runs/detect/models/finetuned/yolov8n_finetuned/weights/best.pt"
 HEAVY = "runs/detect/models/finetuned/yolov8l_finetuned/weights/best.pt"
 
@@ -28,7 +26,6 @@ SEQUENCES = [
 ]
 
 THRESHOLDS = [0.25, 0.35, 0.45, 0.55]
-# ──────────────────────────────────────────────────────────────────────────
 
 
 def compute_iou(boxA, boxB):
@@ -130,11 +127,10 @@ if __name__ == "__main__":
     print(df.to_string(index=False))
     print(f"\nSaved to {RESULTS_PATH}")
 
-    # Find best tradeoff: highest recall with FPS > 100
     viable = df[df["fps"] >= 100]
     if len(viable) > 0:
         best = viable.loc[viable["recall"].idxmax()]
-        print(f"\n✅ Best tradeoff (FPS≥100): T={best['threshold']} → FPS={best['fps']}, Recall={best['recall']}, MD@100={best['md_100']}, Heavy%={best['pct_heavy']}%")
+        print(f"\nBest tradeoff (FPS≥100): T={best['threshold']} → FPS={best['fps']}, Recall={best['recall']}, MD@100={best['md_100']}, Heavy%={best['pct_heavy']}%")
     else:
         best = df.loc[df["recall"].idxmax()]
-        print(f"\n⚠️  No config hits FPS≥100. Best recall: T={best['threshold']} → FPS={best['fps']}, Recall={best['recall']}")
+        print(f"\nNo config hits FPS≥100. Best recall: T={best['threshold']} → FPS={best['fps']}, Recall={best['recall']}")

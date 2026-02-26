@@ -1,4 +1,3 @@
-# experiments/run_adaptive.py
 import sys, os
 sys.path.insert(0, os.path.abspath("."))
 
@@ -9,7 +8,6 @@ from pathlib import Path
 from src.scheduler import AdaptiveScheduler
 from data.caltech.parse_annotations import load_annotations_for_sequences
 
-# ── Config — set BEST_T after reviewing sweep results ─────────────────────
 LIGHT = "runs/detect/models/finetuned/yolov8n_finetuned/weights/best.pt"
 HEAVY = "runs/detect/models/finetuned/yolov8l_finetuned/weights/best.pt"
 
@@ -28,9 +26,7 @@ SEQUENCES = [
     ("set00", "V004"),
 ]
 
-# ── SET THIS after reviewing sweep_results.csv ─────────────────────────────
-BEST_T = 0.35   # update if sweep says otherwise
-# ──────────────────────────────────────────────────────────────────────────
+BEST_T = 0.35   
 
 
 def compute_iou(boxA, boxB):
@@ -131,9 +127,7 @@ if __name__ == "__main__":
 
     pd.DataFrame([adaptive_row]).to_csv(RESULTS_PATH, index=False)
 
-    # Append to full comparison table
     df_full = pd.read_csv(FULL_TABLE_PATH)
-    # Remove any previous adaptive row
     df_full = df_full[~df_full["model"].str.startswith("adaptive")]
     df_full = pd.concat([df_full, pd.DataFrame([adaptive_row])], ignore_index=True)
     df_full.to_csv(FULL_TABLE_PATH, index=False)
@@ -141,7 +135,6 @@ if __name__ == "__main__":
     print(f"\n── Final Comparison Table ──")
     print(df_full[["model","fps","recall","md_100","miss_rate_partial"]].to_string(index=False))
 
-    # Sanity checks
     rows = {r["model"]:r for r in df_full.to_dict("records")}
     l_ft = rows.get("yolov8l_finetuned",{})
     adap = rows.get(f"adaptive_T{BEST_T}",{})
@@ -150,20 +143,18 @@ if __name__ == "__main__":
     print(f"\n── Sanity Checks ──")
     checks_pass = True
 
-    # Adaptive recall should be >= YOLOv8n finetuned
     if adap.get("recall",0) >= n_ft.get("recall",0):
-        print(f"✅ Adaptive recall >= YOLOv8n finetuned ({adap['recall']} >= {n_ft['recall']})")
+        print(f"Adaptive recall >= YOLOv8n finetuned ({adap['recall']} >= {n_ft['recall']})")
     else:
-        print(f"❌ Adaptive recall < YOLOv8n finetuned — scheduler is hurting recall")
+        print(f"Adaptive recall < YOLOv8n finetuned — scheduler is hurting recall")
         checks_pass = False
 
-    # Adaptive FPS should be between light-only and heavy-only
     if n_ft.get("fps",0) >= adap.get("fps",0) >= l_ft.get("fps",0):
-        print(f"✅ Adaptive FPS between light ({n_ft['fps']}) and heavy ({l_ft['fps']}): {adap['fps']}")
+        print(f"Adaptive FPS between light ({n_ft['fps']}) and heavy ({l_ft['fps']}): {adap['fps']}")
     else:
-        print(f"⚠️  Adaptive FPS {adap['fps']} — outside expected range [{l_ft.get('fps')}, {n_ft.get('fps')}]")
+        print(f"Adaptive FPS {adap['fps']} — outside expected range [{l_ft.get('fps')}, {n_ft.get('fps')}]")
 
     if checks_pass:
-        print(f"\n✅ Adaptive pipeline validated. Ready for Day 10: plots + demo video.")
+        print(f"\nAdaptive pipeline validated. Ready for Day 10: plots + demo video.")
     else:
-        print(f"\n❌ Issues found — review before plotting.")
+        print(f"\nIssues found — review before plotting.")

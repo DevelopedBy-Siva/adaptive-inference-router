@@ -1,4 +1,3 @@
-# experiments/run_finetuned_eval.py
 import sys
 import os
 sys.path.insert(0, os.path.abspath("."))
@@ -11,7 +10,6 @@ from pathlib import Path
 from ultralytics import YOLO
 from data.caltech.parse_annotations import load_annotations_for_sequences
 
-# ── Config ───────────────────────────────────────────────────────────────────
 CALTECH_ROOT = "data/caltech"
 FRAMES_ROOT  = "data/caltech/frames"
 EXISTING_BASELINE_CSV = "results/baseline_metrics.csv"
@@ -28,12 +26,10 @@ SEQUENCES = [
     ("set00", "V004"),
 ]
 
-# Point at actual saved weights — Ultralytics saved to runs/detect/
 MODELS = {
     "yolov8n_finetuned": "runs/detect/models/finetuned/yolov8n_finetuned/weights/best.pt",
     "yolov8l_finetuned": "runs/detect/models/finetuned/yolov8l_finetuned/weights/best.pt",
 }
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 def compute_iou(boxA, boxB):
@@ -86,7 +82,7 @@ def run_model_on_sequences(model_name, model_path, all_annotations):
     print(f"{'='*60}")
 
     if not Path(model_path).exists():
-        print(f"❌ ERROR: weights not found at {model_path}")
+        print(f"ERROR: weights not found at {model_path}")
         return None
 
     model = YOLO(model_path)
@@ -187,9 +183,8 @@ if __name__ == "__main__":
     os.makedirs("results", exist_ok=True)
     df_new = pd.DataFrame(results_list)
     df_new.to_csv(RESULTS_PATH, index=False)
-    print(f"\n✅ Fine-tuned results saved to {RESULTS_PATH}")
+    print(f"\nFine-tuned results saved to {RESULTS_PATH}")
 
-    # Merge with pretrained baseline for full comparison table
     df_base = pd.read_csv(EXISTING_BASELINE_CSV)
     df_full = pd.concat([df_base, df_new], ignore_index=True)
     df_full.to_csv(FULL_TABLE_PATH, index=False)
@@ -197,7 +192,6 @@ if __name__ == "__main__":
     print(f"\n── Full Comparison Table ──")
     print(df_full[["model", "fps", "recall", "md_100", "miss_rate_partial"]].to_string(index=False))
 
-    # Sanity checks
     print("\n── Sanity Checks ──")
     rows = {r["model"]: r for r in df_full.to_dict("records")}
 
@@ -213,16 +207,16 @@ if __name__ == "__main__":
     all_pass = True
     for m1, m2, metric, desc in checks:
         if m1 not in rows or m2 not in rows:
-            print(f"  ⚠️  SKIP: {desc} — model not found")
+            print(f"   SKIP: {desc} — model not found")
             continue
         v1, v2 = rows[m1][metric], rows[m2][metric]
         if v1 > v2:
-            print(f"  ✅ PASS: {desc} ({v1} > {v2})")
+            print(f"  PASS: {desc} ({v1} > {v2})")
         else:
-            print(f"  ❌ FAIL: {desc} ({v1} <= {v2}) — investigate before Day 6")
+            print(f"  FAIL: {desc} ({v1} <= {v2}) — investigate before Day 6")
             all_pass = False
 
     if all_pass:
-        print("\n✅ All sanity checks passed. Ready for Day 6: Scheduler implementation.")
+        print("\nAll sanity checks passed. Ready for Day 6: Scheduler implementation.")
     else:
-        print("\n❌ Some checks failed. Debug before building the scheduler.")
+        print("\nSome checks failed. Debug before building the scheduler.")

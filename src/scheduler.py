@@ -1,4 +1,3 @@
-# src/scheduler.py
 import time
 import numpy as np
 from ultralytics import YOLO
@@ -22,8 +21,8 @@ class AdaptiveScheduler:
         light_weights: str,
         heavy_weights: str,
         conf_threshold: float = 0.35,
-        small_box_thresh: float = 0.01,   # fraction of image area
-        streak_window: int = 3,           # frames to look back for streak trigger
+        small_box_thresh: float = 0.01,   
+        streak_window: int = 3,           
         warmup_frames: int = 10,
     ):
         self.conf_threshold  = conf_threshold
@@ -35,10 +34,8 @@ class AdaptiveScheduler:
         print(f"Loading heavy model: {heavy_weights}")
         self.heavy_model = YOLO(heavy_weights)
 
-        # State for streak detection
-        self._recent_had_detection = []   # rolling window of bools
+        self._recent_had_detection = []   
 
-        # Timing accumulators
         self.stats = {
             "total_frames": 0,
             "heavy_triggered": 0,
@@ -47,7 +44,6 @@ class AdaptiveScheduler:
             "total_heavy_ms": 0.0,
         }
 
-        # Warmup both models
         print(f"Warming up models ({warmup_frames} frames)...")
         import numpy as np
         dummy = np.zeros((480, 640, 3), dtype=np.uint8)
@@ -65,7 +61,6 @@ class AdaptiveScheduler:
         img_area = H * W
         boxes = light_results[0].boxes
 
-        # Trigger 1: no detection after a streak of detections
         had_detection = boxes is not None and len(boxes) > 0
         if not had_detection:
             recent_streak = sum(self._recent_had_detection[-self.streak_window:])
@@ -78,11 +73,9 @@ class AdaptiveScheduler:
         confs = boxes.conf.cpu().numpy()
         xyxy  = boxes.xyxy.cpu().numpy()
 
-        # Trigger 2: any detection below confidence threshold
         if np.any(confs < self.conf_threshold):
             return True, f"low_conf({confs.min():.2f})"
 
-        # Trigger 3: any box is very small (far pedestrian)
         for box in xyxy:
             x1, y1, x2, y2 = box
             box_area = (x2 - x1) * (y2 - y1)
@@ -103,7 +96,6 @@ class AdaptiveScheduler:
         H, W = frame_bgr.shape[:2]
         t_start = time.perf_counter()
 
-        # Always run light model
         t0 = time.perf_counter()
         light_results = self.light_model(frame_bgr, classes=[0], verbose=False)
         light_ms = (time.perf_counter() - t0) * 1000
@@ -123,7 +115,6 @@ class AdaptiveScheduler:
             self.stats["light_only_frames"] += 1
             used_model = "light"
 
-        # Update streak state
         had_det = (final_results[0].boxes is not None and len(final_results[0].boxes) > 0)
         self._recent_had_detection.append(had_det)
         if len(self._recent_had_detection) > self.streak_window + 2:
@@ -131,7 +122,6 @@ class AdaptiveScheduler:
 
         self.stats["total_frames"] += 1
 
-        # Parse detections
         detections = []
         if final_results[0].boxes is not None:
             xyxy  = final_results[0].boxes.xyxy.cpu().numpy()

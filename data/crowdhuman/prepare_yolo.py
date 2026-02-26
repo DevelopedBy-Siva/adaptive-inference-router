@@ -1,4 +1,3 @@
-# data/crowdhuman/prepare_yolo.py
 import json
 import os
 import shutil
@@ -6,19 +5,15 @@ from pathlib import Path
 from PIL import Image
 from tqdm import tqdm
 
-# ── Config ──────────────────────────────────────────────────────────────────
 CROWDHUMAN_ROOT = "data/crowdhuman"
 
-# Where the raw images live (adjust if your folder names differ)
 TRAIN_IMG_DIRS = ["train01/Images", "train02/Images", "train03/Images"]
 VAL_IMG_DIRS   = ["val/Images"]
 
 TRAIN_ANN = "data/crowdhuman/annotation_train.odgt"
 VAL_ANN   = "data/crowdhuman/annotation_val.odgt"
 
-# YOLO output root
 YOLO_ROOT = "data/crowdhuman_yolo"
-# ────────────────────────────────────────────────────────────────────────────
 
 
 def build_image_index(img_dirs, root):
@@ -59,15 +54,13 @@ def convert_odgt_to_yolo(odgt_path, img_index, out_img_dir, out_lbl_dir, split_n
 
     for line in tqdm(lines, desc=split_name):
         record = json.loads(line.strip())
-        img_id = record["ID"]  # e.g. "273271,c9db000d5146c15"
+        img_id = record["ID"]  
 
-        # Find the image file
         img_path = img_index.get(img_id)
         if img_path is None:
             skipped_img += 1
             continue
 
-        # Get image dimensions
         try:
             with Image.open(img_path) as img:
                 W, H = img.size
@@ -75,22 +68,21 @@ def convert_odgt_to_yolo(odgt_path, img_index, out_img_dir, out_lbl_dir, split_n
             skipped_img += 1
             continue
 
-        # Build YOLO label lines
         yolo_lines = []
         for gt in record.get("gtboxes", []):
             if gt.get("tag") == "mask":
-                continue  # crowd/ignore regions
+                continue 
             extra = gt.get("extra", {})
             if extra.get("ignore", 0) == 1:
                 skipped_ann += 1
                 continue
 
-            fbox = gt.get("fbox")  # [x, y, w, h] in pixels
+            fbox = gt.get("fbox")  
             if fbox is None:
                 continue
 
             x, y, w, h = fbox
-            # Clamp to image bounds
+
             x = max(0, x)
             y = max(0, y)
             w = min(w, W - x)
@@ -98,13 +90,11 @@ def convert_odgt_to_yolo(odgt_path, img_index, out_img_dir, out_lbl_dir, split_n
             if w <= 0 or h <= 0:
                 continue
 
-            # Convert to YOLO normalized cx cy w h
             cx = (x + w / 2) / W
             cy = (y + h / 2) / H
             nw = w / W
             nh = h / H
 
-            # Clamp to [0,1]
             cx = min(max(cx, 0), 1)
             cy = min(max(cy, 0), 1)
             nw = min(max(nw, 0), 1)
@@ -116,12 +106,10 @@ def convert_odgt_to_yolo(odgt_path, img_index, out_img_dir, out_lbl_dir, split_n
             skipped_img += 1
             continue
 
-        # Copy image
         out_img_path = Path(out_img_dir) / f"{img_id}.jpg"
         if not out_img_path.exists():
             shutil.copy2(img_path, out_img_path)
 
-        # Write label
         out_lbl_path = Path(out_lbl_dir) / f"{img_id}.txt"
         with open(out_lbl_path, "w") as f:
             f.write("\n".join(yolo_lines))
@@ -172,7 +160,6 @@ if __name__ == "__main__":
 
     yaml_path = write_yaml(YOLO_ROOT)
 
-    # Quick sanity check
     train_imgs = list(Path(f"{YOLO_ROOT}/images/train").glob("*.jpg"))
     val_imgs   = list(Path(f"{YOLO_ROOT}/images/val").glob("*.jpg"))
     train_lbls = list(Path(f"{YOLO_ROOT}/labels/train").glob("*.txt"))
@@ -189,7 +176,6 @@ if __name__ == "__main__":
     assert len(train_imgs) > 10000,            f"Too few train images: {len(train_imgs)}"
     assert len(val_imgs) > 3000,               f"Too few val images: {len(val_imgs)}"
 
-    # Check one label file looks valid
     sample_lbl = train_lbls[0]
     with open(sample_lbl) as f:
         lines = f.readlines()
@@ -197,5 +183,5 @@ if __name__ == "__main__":
     for l in lines[:3]:
         print(f"  {l.strip()}")
 
-    print(f"\n✅ CrowdHuman YOLO dataset ready at {YOLO_ROOT}")
+    print(f"\nCrowdHuman YOLO dataset ready at {YOLO_ROOT}")
     print(f"   YAML: {yaml_path}")

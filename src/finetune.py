@@ -1,23 +1,20 @@
-# src/finetune.py
 import os
 import sys
 from pathlib import Path
 from ultralytics import YOLO
 
-# ── Config ───────────────────────────────────────────────────────────────────
 YAML_PATH   = "data/crowdhuman_yolo/crowdhuman.yaml"
 OUTPUT_DIR  = "models/finetuned"
-EPOCHS      = 30          # enough for convergence on CrowdHuman
+EPOCHS      = 30          
 IMGSZ       = 640
-BATCH       = 32          # A100 80GB can handle this for both models
+BATCH       = 32          
 WORKERS     = 8
-DEVICE      = 0           # GPU 0
+DEVICE      = 0          
 
 MODELS_TO_FINETUNE = [
     ("yolov8n_finetuned", "yolov8n.pt"),
     ("yolov8l_finetuned", "yolov8l.pt"),
 ]
-# ─────────────────────────────────────────────────────────────────────────────
 
 
 def finetune(run_name, base_weights):
@@ -38,12 +35,11 @@ def finetune(run_name, base_weights):
         device=DEVICE,
         name=run_name,
         project=OUTPUT_DIR,
-        patience=10,           # early stopping if no improvement for 10 epochs
+        patience=10,           
         save=True,
-        save_period=5,         # checkpoint every 5 epochs
+        save_period=5,         
         val=True,
         plots=True,
-        # Training hyperparameters — keep identical for fair comparison
         lr0=0.01,
         lrf=0.01,
         momentum=0.937,
@@ -52,7 +48,6 @@ def finetune(run_name, base_weights):
         box=7.5,
         cls=0.5,
         dfl=1.5,
-        # Augmentation — standard for pedestrian detection
         hsv_h=0.015,
         hsv_s=0.7,
         hsv_v=0.4,
@@ -67,7 +62,7 @@ def finetune(run_name, base_weights):
     )
 
     best_weights = Path(OUTPUT_DIR) / run_name / "weights" / "best.pt"
-    print(f"\n✅ {run_name} done.")
+    print(f"\n{run_name} done.")
     print(f"   Best weights: {best_weights}")
     print(f"   Final metrics from training:")
     print(f"   metrics/recall(B)    = {results.results_dict.get('metrics/recall(B)', 'N/A'):.4f}")
@@ -85,7 +80,7 @@ if __name__ == "__main__":
         weights_path = finetune(run_name, base_weights)
         trained_paths[run_name] = weights_path
 
-    print("\n── All fine-tuning complete ──")
+    print("\n## All fine-tuning complete ##")
     for name, path in trained_paths.items():
         exists = Path(path).exists()
-        print(f"  {name}: {path} — {'✅ exists' if exists else '❌ MISSING'}")
+        print(f"  {name}: {path} — {'exists' if exists else 'MISSING'}")

@@ -1,4 +1,3 @@
-# experiments/run_baseline.py
 import sys
 import os
 sys.path.insert(0, os.path.abspath("."))
@@ -11,12 +10,11 @@ from pathlib import Path
 from ultralytics import YOLO
 from data.caltech.parse_annotations import load_annotations_for_sequences
 
-# ── Config ─────────────────────────────────────────────────────────────────
 CALTECH_ROOT = "data/caltech"
 FRAMES_ROOT  = "data/caltech/frames"
 RESULTS_PATH = "results/baseline_metrics.csv"
 IOU_THRESH   = 0.5
-MAX_FRAMES   = 500  # per sequence — match what you extracted
+MAX_FRAMES   = 500  
 
 SEQUENCES = [
     ("set00", "V000"),
@@ -30,7 +28,6 @@ MODELS = {
     "yolov8n_pretrained": "yolov8n.pt",
     "yolov8l_pretrained": "yolov8l.pt",
 }
-# ───────────────────────────────────────────────────────────────────────────
 
 
 def compute_iou(boxA, boxB):
@@ -99,7 +96,6 @@ def run_model_on_sequences(model_name, model_path, all_annotations):
     total_fn = 0
     total_fp = 0
 
-    # Occlusion breakdown: occl 0=none, 1=partial, 2=heavy
     occl_tp = {0: 0, 1: 0, 2: 0}
     occl_fn = {0: 0, 1: 0, 2: 0}
 
@@ -113,17 +109,14 @@ def run_model_on_sequences(model_name, model_path, all_annotations):
             frame_idx = int(frame_path.stem.split("_")[1])
             gt_anns = frame_anns.get(frame_idx, [])
 
-            # Filter: only annotated pedestrians (not ignore)
             gt_boxes = [a["bbox"] for a in gt_anns if a["label"] in ["person", "people"]]
             gt_occls = [a["occl"] for a in gt_anns if a["label"] in ["person", "people"]]
 
-            # Run inference
             t0 = time.perf_counter()
             results = model(str(frame_path), classes=[0], verbose=False)  # class 0 = person in COCO
             t1 = time.perf_counter()
             inference_times.append(t1 - t0)
 
-            # Extract predicted boxes in [x, y, w, h]
             pred_boxes = []
             if results[0].boxes is not None and len(results[0].boxes) > 0:
                 xyxy = results[0].boxes.xyxy.cpu().numpy()
@@ -131,30 +124,25 @@ def run_model_on_sequences(model_name, model_path, all_annotations):
                     x1, y1, x2, y2 = box
                     pred_boxes.append([x1, y1, x2 - x1, y2 - y1])
 
-            # Overall matching
             tp, fn, fp = match_detections(gt_boxes, pred_boxes, IOU_THRESH)
             total_tp += tp
             total_fn += fn
             total_fp += fp
             total_frames += 1
 
-            # Occlusion breakdown: match per GT individually
             for i, gt_box in enumerate(gt_boxes):
                 occl = gt_occls[i] if i < len(gt_occls) else 0
                 occl = min(occl, 2)  # cap at 2
-                # Check if this GT was matched (simple: re-match just this GT)
                 tp_i, fn_i, _ = match_detections([gt_box], pred_boxes, IOU_THRESH)
                 occl_tp[occl] += tp_i
                 occl_fn[occl] += fn_i
 
-    # Compute metrics
     recall = total_tp / (total_tp + total_fn) if (total_tp + total_fn) > 0 else 0.0
     precision = total_tp / (total_tp + total_fp) if (total_tp + total_fp) > 0 else 0.0
     md_100 = (total_fn / total_frames) * 100 if total_frames > 0 else 0.0
     avg_ms = np.mean(inference_times) * 1000
     fps = 1000 / avg_ms if avg_ms > 0 else 0.0
 
-    # Miss rate per occlusion group
     def miss_rate(occl_level):
         denom = occl_tp[occl_level] + occl_fn[occl_level]
         if denom == 0:
@@ -189,7 +177,6 @@ def run_model_on_sequences(model_name, model_path, all_annotations):
 
 
 if __name__ == "__main__":
-    # Load annotations once
     print("Loading annotations...")
     all_annotations = load_annotations_for_sequences(CALTECH_ROOT, SEQUENCES)
 
@@ -198,22 +185,20 @@ if __name__ == "__main__":
         row = run_model_on_sequences(model_name, model_path, all_annotations)
         results_list.append(row)
 
-    # Save results
     os.makedirs("results", exist_ok=True)
     df = pd.DataFrame(results_list)
     df.to_csv(RESULTS_PATH, index=False)
-    print(f"\n✅ Results saved to {RESULTS_PATH}")
+    print(f"\nResults saved to {RESULTS_PATH}")
     print(df.to_string(index=False))
 
-    # Sanity check
     print("\n── Sanity Check ──")
     n_row = df[df.model == "yolov8n_pretrained"].iloc[0]
     l_row = df[df.model == "yolov8l_pretrained"].iloc[0]
     if l_row.recall > n_row.recall:
-        print("✅ PASS: YOLOv8l recall > YOLOv8n recall — expected")
+        print("PASS: YOLOv8l recall > YOLOv8n recall — expected")
     else:
-        print("❌ FAIL: YOLOv8l recall <= YOLOv8n recall — something is wrong, debug before proceeding")
+        print("FAIL: YOLOv8l recall <= YOLOv8n recall — something is wrong, debug before proceeding")
     if n_row.fps > l_row.fps:
-        print("✅ PASS: YOLOv8n FPS > YOLOv8l FPS — expected")
+        print("PASS: YOLOv8n FPS > YOLOv8l FPS — expected")
     else:
-        print("❌ FAIL: YOLOv8n FPS <= YOLOv8l FPS — check inference setup")
+        print("FAIL: YOLOv8n FPS <= YOLOv8l FPS — check inference setup")
