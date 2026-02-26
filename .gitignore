@@ -208,3 +208,9 @@ __marimo__/
 
 yolov8l.pt
 yolov8n.pt
+
+data/*
+!data/caltech/
+data/caltech/*
+!data/caltech/convert_seqs.py
+!data/caltech/parse_annotations.py

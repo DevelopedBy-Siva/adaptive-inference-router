@@ -9,3 +9,4 @@ torchvision
 Pillow
 tqdm
 PyYAML
+scipy
