@@ -1,4 +1,4 @@
-# Adaptive Cascaded Inference for Pedestrian Detection
+# Adaptive Inference Router: Confidence-Based Model Selection for Real-Time Object Detection
 
 Speed and accuracy are usually presented as a binary choice in object detection. Run a heavy model and get reliable detections at 94 FPS. Run a lightweight model and get 128 FPS but miss more pedestrians. Most deployed systems just pick one and accept the tradeoff.
 
