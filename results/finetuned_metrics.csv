@@ -1,0 +1,3 @@
+model,frames,recall,precision,md_100,fps,miss_rate_none,miss_rate_partial,miss_rate_heavy
+yolov8n_finetuned,2500,0.2393,0.7317,141.16,127.9,0.7134,0.927,
+yolov8l_finetuned,2500,0.2645,0.8319,136.48,94.5,0.6823,0.9228,
