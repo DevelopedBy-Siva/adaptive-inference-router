@@ -1,5 +1,6 @@
-model,frames,recall,precision,md_100,fps,miss_rate_none,miss_rate_partial,miss_rate_heavy
-yolov8n_pretrained,2500,0.2279,0.7671,143.28,124.5,0.7232,0.9455,
-yolov8l_pretrained,2500,0.2774,0.7602,134.08,99.3,0.6684,0.9126,
-yolov8n_finetuned,2500,0.2393,0.7317,141.16,127.9,0.7134,0.927,
-yolov8l_finetuned,2500,0.2645,0.8319,136.48,94.5,0.6823,0.9228,
+model,frames,recall,precision,md_100,fps,miss_rate_none,miss_rate_partial,miss_rate_heavy,pct_heavy
+yolov8n_pretrained,2500,0.2279,0.7671,143.28,124.5,0.7232,0.9455,,
+yolov8l_pretrained,2500,0.2774,0.7602,134.08,99.3,0.6684,0.9126,,
+yolov8n_finetuned,2500,0.2393,0.7317,141.16,127.9,0.7134,0.927,,
+yolov8l_finetuned,2500,0.2645,0.8319,136.48,94.5,0.6823,0.9228,,
+adaptive_T0.35,2500,0.2442,0.8655,140.24,124.6,0.7044,0.9372,,27.0
