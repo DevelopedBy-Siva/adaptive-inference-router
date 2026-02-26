@@ -30,29 +30,34 @@ On Caltech evaluation after fine-tuning, the improvement is more modest because 
 
 All numbers measured on Caltech Pedestrian set00, 2,500 frames, IoU threshold 0.5. FPS figures reflect GPU inference throughput on A100 (model forward pass + NMS), not end-to-end pipeline latency.
 
-| Configuration | FPS | Recall | Precision | MD@100 | Miss Rate (partial occlusion) |
-|---|---|---|---|---|---|
-| YOLOv8n pretrained | 124.5 | 0.2279 | 0.7671 | 143.28 | 0.9455 |
-| YOLOv8l pretrained | 99.3 | 0.2774 | 0.7602 | 134.08 | 0.9126 |
-| YOLOv8n fine-tuned | 127.9 | 0.2393 | 0.7317 | 141.16 | 0.9270 |
-| YOLOv8l fine-tuned | 94.5 | 0.2645 | 0.8319 | 136.48 | 0.9228 |
-| Adaptive Pipeline (T=0.35) | 124.6 | 0.2442 | **0.8655** | 140.24 | 0.9372 |
+| Configuration              | FPS   | Recall | Precision  | MD@100 | Miss Rate (partial occlusion) |
+| -------------------------- | ----- | ------ | ---------- | ------ | ----------------------------- |
+| YOLOv8n pretrained         | 124.5 | 0.2279 | 0.7671     | 143.28 | 0.9455                        |
+| YOLOv8l pretrained         | 99.3  | 0.2774 | 0.7602     | 134.08 | 0.9126                        |
+| YOLOv8n fine-tuned         | 127.9 | 0.2393 | 0.7317     | 141.16 | 0.9270                        |
+| YOLOv8l fine-tuned         | 94.5  | 0.2645 | 0.8319     | 136.48 | 0.9228                        |
+| Adaptive Pipeline (T=0.35) | 124.6 | 0.2442 | **0.8655** | 140.24 | 0.9372                        |
 
 MD@100 is missed detections per 100 frames — a deployment-oriented metric that reflects how many pedestrians a system silently ignores per unit of video processed.
 
 The adaptive pipeline does not match YOLOv8l fine-tuned recall — it sits between the two models, which is expected behavior. What it does achieve is the highest precision across all configurations while running at near-light-model throughput. When the system emits a detection, it is more likely to be correct than any other configuration tested.
+
+![demo](results/figures/demo.gif)
 
 ---
 
 ## Plots
 
 ### Speed vs Safety — FPS vs MD@100
+
 ![FPS vs MD@100](results/figures/plot1_fps_vs_md100.png)
 
 ### Recall Comparison across Configurations
+
 ![Recall Comparison](results/figures/plot2_recall_comparison.png)
 
 ### Threshold Sweep — Cost of Being Safer
+
 ![Threshold Sweep](results/figures/plot3_threshold_sweep.png)
 
 ---
@@ -61,12 +66,12 @@ The adaptive pipeline does not match YOLOv8l fine-tuned recall — it sits betwe
 
 The confidence threshold T controls how aggressively the scheduler escalates to the heavy model. Lower T means the light model needs to be very confident before the heavy model is skipped.
 
-| T | FPS | Recall | MD@100 | Heavy Model Triggered |
-|---|---|---|---|---|
-| 0.25 | 129.0 | 0.2464 | 139.84 | 24.6% |
-| 0.35 | 125.5 | 0.2442 | 140.24 | 27.0% |
-| 0.45 | 124.2 | 0.2442 | 140.24 | 28.0% |
-| 0.55 | 122.9 | 0.2442 | 140.24 | 28.8% |
+| T    | FPS   | Recall | MD@100 | Heavy Model Triggered |
+| ---- | ----- | ------ | ------ | --------------------- |
+| 0.25 | 129.0 | 0.2464 | 139.84 | 24.6%                 |
+| 0.35 | 125.5 | 0.2442 | 140.24 | 27.0%                 |
+| 0.45 | 124.2 | 0.2442 | 140.24 | 28.0%                 |
+| 0.55 | 122.9 | 0.2442 | 140.24 | 28.8%                 |
 
 T=0.25 is the best operating point: highest recall, highest FPS, fewest heavy model invocations. The scheduler at this threshold is genuinely selective — it escalates only the frames where escalation is warranted, not as a reflexive fallback.
 
@@ -113,10 +118,10 @@ Both models were fine-tuned identically to keep the comparison fair:
 
 CrowdHuman validation metrics after fine-tuning:
 
-| Model | Recall | Precision | mAP50 |
-|---|---|---|---|
-| YOLOv8n fine-tuned | 0.7017 | 0.8487 | 0.8155 |
-| YOLOv8l fine-tuned | 0.7922 | 0.8717 | 0.8792 |
+| Model              | Recall | Precision | mAP50  |
+| ------------------ | ------ | --------- | ------ |
+| YOLOv8n fine-tuned | 0.7017 | 0.8487    | 0.8155 |
+| YOLOv8l fine-tuned | 0.7922 | 0.8717    | 0.8792 |
 
 ---
 
