@@ -1,70 +1,98 @@
 # Adaptive Inference Router: Confidence-Based Model Selection for Real-Time Object Detection
 
-Speed and accuracy are usually presented as a binary choice in object detection. Run a heavy model and get reliable detections at 94 FPS. Run a lightweight model and get 128 FPS but miss more pedestrians. Most deployed systems just pick one and accept the tradeoff.
+Real-time perception systems usually face a simple tradeoff: run a **large model for accuracy** or a **small model for speed**. Most deployments pick one model and accept the compromise.
 
-This project asks a different question: what if the system could decide, frame by frame, when accuracy matters enough to spend the extra compute?
+This project explores a different approach:
 
----
+> **Can a system dynamically decide, frame by frame, when higher accuracy is worth the extra compute?**
 
-## What This Project Builds
-
-The pipeline runs a fine-tuned YOLOv8n on every frame. When it looks uncertain — low detection confidence, a pedestrian streak that suddenly drops, or a very small box indicating a far-away person — it escalates that frame to YOLOv8l. The heavy model's result replaces the light model's result for that frame only. Everything else gets YOLOv8n's answer.
-
-The result is a system that runs at 124.6 FPS GPU inference throughput while achieving 0.8655 precision — the highest of any configuration tested, including running YOLOv8l alone at full cost. On a dense sequence (V001, 7,303 pedestrian instances), heavy model invocation rises to 56.2% of frames and throughput settles at 83.4 FPS — still well above real-time requirements.
-
-Precision is the real result of this project. The scheduler is not a recall recovery mechanism. Recall improves slightly over YOLOv8n fine-tuned (0.2464 vs 0.2393 at T=0.25) but does not reach YOLOv8l fine-tuned recall (0.2645) — that gap is expected in cascaded systems where the base models are architecturally similar. What the scheduler does achieve is a meaningful precision gain: by invoking the heavy model selectively on uncertain frames, it filters out the low-confidence detections that the light model would otherwise emit, raising the trustworthiness of every detection in the output stream.
+The result is a **confidence-based inference router** that runs a lightweight model on every frame and selectively escalates uncertain frames to a heavier model. The system preserves near-lightweight throughput while improving detection reliability.
 
 ---
 
-## The Domain Gap Problem
+# Overview
 
-Both models were pretrained on COCO, which underrepresents dense urban pedestrian scenarios from a vehicle-mounted camera perspective. Running pretrained YOLOv8n on Caltech Pedestrian driving footage produces 22.8% recall. YOLOv8l pretrained gets 27.7%. These numbers are low — but they are honest, and they quantify exactly how much the COCO-to-driving-video domain shift costs.
+The pipeline runs **YOLOv8n (light model)** on every frame. When the model appears uncertain — based on confidence, detection continuity, or object scale — the frame is escalated to **YOLOv8l (heavy model)**.
 
-Fine-tuning both models on CrowdHuman closed that gap. CrowdHuman was specifically chosen because it contains the hard cases: dense crowds, heavy occlusion, overlapping people. On CrowdHuman validation, recall jumped from a pretrained baseline of roughly 28% to 79.2% for YOLOv8l and 70.2% for YOLOv8n. The models learned to handle the hard cases.
+Only those frames are recomputed with the larger model, and the heavier model’s output replaces the lightweight result for that frame.
 
-On Caltech evaluation after fine-tuning, the improvement is more modest because set00 — the evaluation sequence used here — is relatively sparse and clean. The scheduler's precision advantage is most visible on dense sequences: on V001, which contains 7,303 pedestrian instances, the heavy model fires on 56.2% of frames to keep up with the scene complexity.
+```
+Frame → YOLOv8n
+        |
+        | confident detection
+        └── use YOLOv8n result
 
----
+        | uncertainty detected
+        └── run YOLOv8l → replace detection
+```
 
-## Results
+This creates a **compute-aware inference policy** rather than a fixed model choice.
 
-All numbers measured on Caltech Pedestrian set00, 2,500 frames, IoU threshold 0.5. FPS figures reflect GPU inference throughput on A100 (model forward pass + NMS), not end-to-end pipeline latency.
+The adaptive pipeline achieves:
 
-| Configuration              | FPS   | Recall | Precision  | MD@100 | Miss Rate (partial occlusion) |
-| -------------------------- | ----- | ------ | ---------- | ------ | ----------------------------- |
-| YOLOv8n pretrained         | 124.5 | 0.2279 | 0.7671     | 143.28 | 0.9455                        |
-| YOLOv8l pretrained         | 99.3  | 0.2774 | 0.7602     | 134.08 | 0.9126                        |
-| YOLOv8n fine-tuned         | 127.9 | 0.2393 | 0.7317     | 141.16 | 0.9270                        |
-| YOLOv8l fine-tuned         | 94.5  | 0.2645 | 0.8319     | 136.48 | 0.9228                        |
-| Adaptive Pipeline (T=0.35) | 124.6 | 0.2442 | **0.8655** | 140.24 | 0.9372                        |
+* **124.6 FPS inference throughput**
+* **0.8655 precision (highest among all tested configurations)**
 
-MD@100 is missed detections per 100 frames — a deployment-oriented metric that reflects how many pedestrians a system silently ignores per unit of video processed.
-
-The adaptive pipeline does not match YOLOv8l fine-tuned recall — it sits between the two models, which is expected behavior. What it does achieve is the highest precision across all configurations while running at near-light-model throughput. When the system emits a detection, it is more likely to be correct than any other configuration tested.
-
-![demo](results/figures/demo.gif)
+while invoking the heavy model on only **~27% of frames** in typical sequences.
 
 ---
 
-## Plots
+# Key Idea
 
-### Speed vs Safety — FPS vs MD@100
+Instead of committing to one model globally, the system **allocates compute selectively** based on detection confidence and scene context.
 
-![FPS vs MD@100](results/figures/plot1_fps_vs_md100.png)
+Heavy model escalation is triggered when the lightweight detector shows signs of failure:
 
-### Recall Comparison across Configurations
+1. **Low confidence detection**
+2. **Detection streak break** (pedestrian disappears after multiple frames)
+3. **Very small bounding boxes** (far-away pedestrians)
 
-![Recall Comparison](results/figures/plot2_recall_comparison.png)
-
-### Threshold Sweep — Cost of Being Safer
-
-![Threshold Sweep](results/figures/plot3_threshold_sweep.png)
+These signals capture common failure modes of lightweight detectors.
 
 ---
 
-## Threshold Sweep
+# Results
 
-The confidence threshold T controls how aggressively the scheduler escalates to the heavy model. Lower T means the light model needs to be very confident before the heavy model is skipped.
+Evaluation was performed on **Caltech Pedestrian set00 (2,500 frames)** with IoU = 0.5.
+
+| Configuration         | FPS       | Recall | Precision  | MD@100 |
+| --------------------- | --------- | ------ | ---------- | ------ |
+| YOLOv8n pretrained    | 124.5     | 0.2279 | 0.7671     | 143.28 |
+| YOLOv8l pretrained    | 99.3      | 0.2774 | 0.7602     | 134.08 |
+| YOLOv8n fine-tuned    | 127.9     | 0.2393 | 0.7317     | 141.16 |
+| YOLOv8l fine-tuned    | 94.5      | 0.2645 | 0.8319     | 136.48 |
+| **Adaptive Pipeline** | **124.6** | 0.2442 | **0.8655** | 140.24 |
+
+The adaptive system achieves **higher precision than either standalone model**, while maintaining throughput close to the lightweight detector.
+
+Recall falls between the two base models, which is expected for cascaded systems where both detectors share similar architecture.
+
+---
+
+# Precision vs Recall Tradeoff
+
+The scheduler primarily improves **precision**, not recall.
+
+Recall increases slightly relative to the lightweight model:
+
+```
+YOLOv8n fine-tuned   → 0.2393
+Adaptive pipeline    → 0.2442
+```
+
+but does not reach the recall of the large model.
+
+Instead, the scheduler improves **trustworthiness of detections** by replacing uncertain predictions with higher-quality outputs.
+
+When the system emits a detection, it is more likely to be correct.
+
+---
+
+# Threshold Sweep
+
+The threshold **T** controls escalation sensitivity.
+
+Lower thresholds mean the system escalates **more conservatively**.
 
 | T    | FPS   | Recall | MD@100 | Heavy Model Triggered |
 | ---- | ----- | ------ | ------ | --------------------- |
@@ -73,119 +101,158 @@ The confidence threshold T controls how aggressively the scheduler escalates to 
 | 0.45 | 124.2 | 0.2442 | 140.24 | 28.0%                 |
 | 0.55 | 122.9 | 0.2442 | 140.24 | 28.8%                 |
 
-T=0.25 is the best operating point: highest recall, highest FPS, fewest heavy model invocations. The scheduler at this threshold is genuinely selective — it escalates only the frames where escalation is warranted, not as a reflexive fallback.
+The best operating point was **T = 0.25**, balancing recall, throughput, and compute cost.
 
 ---
 
-## Pipeline Logic
+# Domain Adaptation
 
-```
-Input Frame
-     |
-     v
-YOLOv8n fine-tuned (every frame)
-     |
-     |-- All detections high confidence, normal box sizes, no streak break
-     |   --> Use YOLOv8n result directly
-     |
-     |-- Any trigger fires:
-     |   - Any detection confidence < T
-     |   - No detection after 3+ consecutive frames with detections
-     |   - Any box covers < 1% of image area (far pedestrian)
-     |        |
-     |        v
-     |   YOLOv8l fine-tuned (this frame only)
-     |        |
-     |        v
-     |   Use YOLOv8l result
-     v
-Final detection output
-```
+Both models were pretrained on **COCO**, which contains relatively few dense urban pedestrian scenes.
 
-The three trigger conditions target different failure modes. Low confidence catches frames where the light model is uncertain about what it sees. The streak break condition catches frames where a pedestrian was tracked for multiple frames and then disappears — which is more likely a missed detection than the pedestrian actually leaving the scene. The small box condition catches far-away pedestrians, which are disproportionately missed by lighter models.
+Running pretrained models directly on driving footage shows a clear domain gap:
 
----
+| Model              | Recall |
+| ------------------ | ------ |
+| YOLOv8n pretrained | 22.8%  |
+| YOLOv8l pretrained | 27.7%  |
 
-## Training Setup
-
-Both models were fine-tuned identically to keep the comparison fair:
-
-- Dataset: CrowdHuman (15,000 train / 4,370 val images)
-- Annotations: full-body bounding boxes (fbox), ignore=1 crowd regions filtered out
-- Epochs: 30, batch size: 32, image size: 640
-- Hardware: NVIDIA A100-SXM4-80GB
-- Training time: approximately 1-2 hours per model
-
-CrowdHuman validation metrics after fine-tuning:
+Fine-tuning on **CrowdHuman**, which contains dense and heavily occluded pedestrians, significantly improved performance:
 
 | Model              | Recall | Precision | mAP50  |
 | ------------------ | ------ | --------- | ------ |
 | YOLOv8n fine-tuned | 0.7017 | 0.8487    | 0.8155 |
 | YOLOv8l fine-tuned | 0.7922 | 0.8717    | 0.8792 |
 
----
-
-## Datasets
-
-**CrowdHuman** was used for fine-tuning. It contains 470K annotated human instances across 15,000 training images, with an average of 23 persons per image. The density and occlusion characteristics directly target the failure modes that COCO-pretrained models struggle with.
-
-**Caltech Pedestrian** was used for evaluation. It is real video captured from a moving vehicle in urban traffic, recorded at 30 FPS with per-instance occlusion labels. Evaluating on a dataset completely separate from training tests whether the improvements generalize to actual deployment conditions rather than just measuring benchmark performance.
+This demonstrates how **dataset domain alignment** strongly affects detection quality.
 
 ---
 
-## Why This Matters for Deployed Systems
+# Scheduler Logic
 
-Every AV and drone perception system has a compute budget. The standard industry response is to deploy a lighter model and accept the accuracy drop. This project demonstrates a third option: spend compute selectively, on the frames that actually need it.
+```
+Input Frame
+     |
+     v
+YOLOv8n (every frame)
+     |
+     |-- All detections confident
+     |      → use YOLOv8n result
+     |
+     |-- Any trigger fires:
+     |      - detection confidence < T
+     |      - detection streak breaks
+     |      - bounding box < 1% image area
+     |
+     v
+YOLOv8l
+     |
+     v
+Final detection output
+```
 
-The concrete outcome is controlled. On a typical driving sequence, the heavy model runs on roughly 25% of frames, keeping throughput at near-light-model speed. On a dense, crowded sequence it runs on 56% of frames — because the scene genuinely requires it. The scheduler is not a fixed compute saver; it is a scene-aware allocator that adjusts to what is actually happening in the video.
+The scheduler captures three common failure modes:
 
-The approach is architecture-agnostic. The same scheduler logic applies to any pair of fast and accurate models, and the threshold T is a single tunable parameter. Raise T to save compute; lower T to be more conservative. The tradeoff is explicit and measurable, which is what matters for real deployment decisions.
+| Trigger                | Failure Mode        |
+| ---------------------- | ------------------- |
+| Low confidence         | ambiguous detection |
+| Detection streak break | missed pedestrian   |
+| Small box              | distant pedestrian  |
 
 ---
 
-## Project Structure
+# Why This Matters
+
+Real-world perception systems operate under **strict compute budgets**.
+
+The typical solution is to deploy a lightweight model and accept lower accuracy.
+
+This project demonstrates an alternative strategy:
+
+> **allocate compute dynamically where it matters most**
+
+The system adjusts automatically to scene complexity:
+
+* **Sparse scenes** → heavy model rarely used
+* **Crowded scenes** → heavy model invoked more frequently
+
+The policy is also **model-agnostic**. Any pair of fast and accurate models can be used.
+
+---
+
+# Datasets
+
+### CrowdHuman
+
+Used for model fine-tuning.
+
+* 470k annotated persons
+* average **23 people per image**
+* heavy occlusion and crowding
+
+### Caltech Pedestrian
+
+Used for evaluation.
+
+* vehicle-mounted urban driving footage
+* 30 FPS video
+* detailed occlusion annotations
+
+Evaluating on a dataset different from training tests whether improvements generalize beyond the training distribution.
+
+---
+
+# Demo
+
+![demo](results/figures/demo.gif)
+
+---
+
+# Project Structure
 
 ```
 adaptive-pedestrian-detection/
-|
-|-- data/
-|   |-- caltech/                  # .seq files, .vbb annotations, extracted frames
-|   `-- crowdhuman/               # train/val images, .odgt annotations
-|
-|-- data/crowdhuman_yolo/         # converted YOLO format dataset
-|
-|-- src/
-|   `-- scheduler.py              # AdaptiveScheduler class
-|
-|-- experiments/
-|   |-- run_baseline.py           # pretrained model eval
-|   |-- run_finetuned_eval.py     # fine-tuned model eval
-|   |-- run_adaptive.py           # adaptive pipeline eval
-|   |-- sweep_thresholds.py       # T sweep across 0.25-0.55
-|   `-- plot_results.py           # all three plots
-|
-|-- results/
-|   |-- full_comparison.csv
-|   |-- sweep_results.csv
-|   `-- figures/                  # plot1, plot2, plot3
-|
-|-- demo/
-|   |-- demo_video.py
-|   `-- adaptive_demo.mp4         # 16.7s demo, light/heavy switching visible
-|
-`-- README.md
+
+data/
+  caltech/
+  crowdhuman/
+
+src/
+  scheduler.py
+
+experiments/
+  run_baseline.py
+  run_finetuned_eval.py
+  run_adaptive.py
+  sweep_thresholds.py
+  plot_results.py
+
+results/
+  full_comparison.csv
+  sweep_results.csv
+  figures/
+
+demo/
+  demo_video.py
 ```
 
 ---
 
-## Tech Stack
+# Tech Stack
 
-Python 3.10, PyTorch 2.10, Ultralytics YOLOv8, OpenCV, NumPy, Pandas, Matplotlib, SciPy. Hardware: NVIDIA A100-SXM4-80GB.
+Python 3.10
+PyTorch
+Ultralytics YOLOv8
+OpenCV
+NumPy
+Pandas
+Matplotlib
+
+Hardware: **NVIDIA A100-SXM4-80GB**
 
 ---
 
-## References
+# References
 
-- Shao et al., "CrowdHuman: A Benchmark for Detecting Human in a Crowd", arXiv 2018
-- Dollar et al., "Pedestrian Detection: An Evaluation of the State of the Art", PAMI 2012
-- Ultralytics YOLOv8, 2023
+Shao et al. — *CrowdHuman: A Benchmark for Detecting Human in a Crowd*
+Dollar et al. — *Pedestrian Detection: An Evaluation of the State of the Art*
+Ultralytics — *YOLOv8*
